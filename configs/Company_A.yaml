@@ -1,0 +1,197 @@
+
+company:
+  name: company_A
+  reporting_currency: ZAR
+  country: South Africa
+
+  reporting_period:
+    start: "2021-01-01"
+    end: "2024-12-31"
+
+
+data_sources:
+
+  erp:
+    file: "data/raw/Cantill_DataML_Task_Kit/company_A/erp_goods_receipts.csv"
+    record_id: line_id
+
+    columns:
+      amount: value_zar
+      date: posting_date
+      supplier_name: supplier_name
+      supplier_id: vendor_id
+      description: material_short_text
+      material_number: material_number
+      material_type: material_type
+      po_number: po_number
+      po_item: po_item
+      quantity: quantity
+      spend_type: spend_type
+
+  invoice_tool:
+    file: "data/raw/Cantill_DataML_Task_Kit/company_A/invoice_tool_export.csv"
+    record_id: tool_record_id
+
+    columns:
+      invoice_number: invoice_number
+      amount: gross_amount
+      date: invoice_date
+      supplier_name: supplier_name_as_captured
+      description: line_text
+      po_reference: po_reference
+      quantity: quantity
+      vat_rate: vat_rate
+      status: status
+
+
+financial_rules:
+
+  reporting_currency: ZAR
+
+  erp:
+    amount_type: net
+
+  invoice_tool:
+    amount_type: gross
+
+    vat:
+      default_rate: 0.15
+      missing_rate_policy: use_default
+      remove_vat: true
+
+
+spend_rules:
+
+  eligible_statuses:
+    - Approved
+    - Paid
+
+  exclusion_reasons:
+    cancelled:
+      code: CANCELLED
+
+    not_approved:
+      code: NOT_APPROVED
+
+    non_procurement:
+      code: NON_PROCUREMENT
+
+    duplicate:
+      code: DUPLICATE
+
+
+matching:
+
+  field_mapping:
+    erp:
+      po_number: po_number
+      po_item: po_item
+
+    invoice_tool:
+      po_reference: po_reference
+
+  normalization:
+    extract_po_number: true
+    extract_po_item: true
+    standardize_po_format: true
+
+  matching_features:
+    - po_number
+    - po_item
+    - supplier_name
+    - amount
+    - description
+    - date
+
+  matching_weights:
+    po_number: 0.35
+    po_item: 0.10
+    supplier_name: 0.20
+    amount: 0.15
+    description: 0.15
+    date: 0.05
+
+  thresholds:
+    high_confidence: 0.90
+    possible_match: 0.70
+
+  safeguards:
+    require_supplier_validation: true
+    require_amount_validation: true
+    enforce_one_to_one_matching: true
+    allow_missing_po_reference: true
+
+  reconciliation:
+    preferred_source: erp
+    duplicate_exclusion_code: DUPLICATE
+
+
+deduplication:
+
+  supplier:
+    enabled: true
+    primary_identifier: vendor_id
+    name_column: supplier_name
+    similarity_threshold: 0.90
+    method: fuzzy_matching
+
+  item:
+    enabled: true
+    primary_identifier: material_number
+    description_column: material_short_text
+    similarity_threshold: 0.90
+    method: fuzzy_matching
+
+
+taxonomy:
+  file: "data/raw/Cantill_DataML_Task_Kit/company_A/taxonomy_A.csv"
+
+  columns:
+    level_1: category_l1
+    level_2: category_l2
+    level_3: category_l3
+
+  maximum_depth: 3
+
+
+classification:
+
+  method: hybrid
+
+  labels:
+    file: "data/raw/Cantill_DataML_Task_Kit/company_A/labels_A.csv"
+    record_id: record_id
+
+    category_columns:
+      - category_l1
+      - category_l2
+      - category_l3
+
+    supplier_key: supplier_key
+    item_key: item_key
+
+  confidence:
+    minimum: 0.0
+    maximum: 1.0
+
+  fallback:
+    enabled: true
+    use_taxonomy_only: true
+    allow_zero_training_labels: true
+
+
+output:
+  directory: outputs/
+  filename_suffix: "__A.csv"
+
+  columns:
+    - record_id
+    - include
+    - exclusion_reason
+    - supplier_key
+    - item_key
+    - spend
+    - l1
+    - l2
+    - l3
+    - confidence
